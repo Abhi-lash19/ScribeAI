@@ -1,129 +1,47 @@
-import { useEffect, useState } from "react";
-import { StreamChat } from "stream-chat";
-import {
-  Chat,
-  Channel,
-  Window,
-  ChannelHeader,
-  MessageList,
-  MessageInput,
-  LoadingIndicator,
-} from "stream-chat-react";
+import { useState } from "react";
+import type { User } from "stream-chat";
 
-import "stream-chat-react/dist/css/v2/index.css";
-import "./App.css";
+import { AuthenticatedApp } from "./components/chat/authenticated-app";
+import { Login } from "./components/auth/login";
+import { Toaster } from "./components/ui/toaster";
+import { ThemeProvider } from "./providers/theme-provider";
 
-const apiKey = import.meta.env.VITE_STREAM_API_KEY as string;
-const backendUrl = import.meta.env.VITE_BACKEND_URL as string;
+const USER_STORAGE_KEY = "chat-ai-app-user";
 
 function App() {
-  const [chatClient, setChatClient] = useState<StreamChat | null>(null);
-  const [username, setUsername] = useState("");
-  const [channelId] = useState("ai-writing");
-  const [isConnecting, setIsConnecting] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [user, setUser] = useState<User | null>(() => {
+    const savedUser = localStorage.getItem(USER_STORAGE_KEY);
+    return savedUser ? JSON.parse(savedUser) : null;
+  });
 
-  // Clean up on unmount
-  useEffect(() => {
-    return () => {
-      if (chatClient) {
-        chatClient.disconnectUser();
-      }
+  const handleUserLogin = (authenticatedUser: User) => {
+    const avatarUrl = `https://api.dicebear.com/9.x/avataaars/svg?seed=${authenticatedUser.name}`;
+    const userWithImage: User = {
+      ...authenticatedUser,
+      image: avatarUrl,
     };
-  }, [chatClient]);
 
-  const handleConnect = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!username) return;
-    if (!apiKey) {
-      setError("Missing VITE_STREAM_API_KEY in frontend .env");
-      return;
-    }
-    if (!backendUrl) {
-      setError("Missing VITE_BACKEND_URL in frontend .env");
-      return;
-    }
-
-    setIsConnecting(true);
-    setError(null);
-
-    try {
-      // ⬇️ This expects a backend route that returns { token, user }
-      const res = await fetch(`${backendUrl}/token`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ userId: username }),
-      });
-
-      if (!res.ok) {
-        const body = await res.text();
-        throw new Error(`Backend /token failed: ${res.status} ${body}`);
-      }
-
-      const data = await res.json();
-
-      const client = StreamChat.getInstance(apiKey);
-      await client.connectUser(
-        {
-          id: data.user.id,
-          name: data.user.name ?? data.user.id,
-        },
-        data.token
-      );
-
-      const channel = client.channel("messaging", channelId, {
-        name: "AI Writing Assistant",
-      });
-      await channel.watch();
-
-      setChatClient(client);
-    } catch (err: any) {
-      console.error("Error connecting:", err);
-      setError(err.message ?? "Failed to connect");
-    } finally {
-      setIsConnecting(false);
-    }
+    localStorage.setItem(USER_STORAGE_KEY, JSON.stringify(userWithImage));
+    setUser(userWithImage);
   };
 
-  // ⬇️ Login / username screen
-  if (!chatClient) {
-    return (
-      <div className="app-root">
-        <div className="login-card">
-          <h1>AI Writing Assistant</h1>
-          <p>Enter a username to start chatting.</p>
+  const handleLogout = () => {
+    localStorage.removeItem(USER_STORAGE_KEY);
+    setUser(null);
+  };
 
-          <form onSubmit={handleConnect} className="login-form">
-            <input
-              type="text"
-              placeholder="Choose a username"
-              value={username}
-              onChange={(e) => setUsername(e.target.value)}
-            />
-            <button type="submit" disabled={isConnecting || !username}>
-              {isConnecting ? "Connecting..." : "Start Chat"}
-            </button>
-          </form>
-
-          {error && <p className="error-text">{error}</p>}
-        </div>
-      </div>
-    );
-  }
-
-  // ⬇️ Main chat UI
   return (
-    <div className="app-root">
-      <Chat client={chatClient} theme="str-chat__theme-light">
-        <Channel>
-          <Window>
-            <ChannelHeader />
-            <MessageList />
-            <MessageInput focus />
-          </Window>
-        </Channel>
-      </Chat>
-    </div>
+    <ThemeProvider defaultTheme="dark" storageKey="vite-ui-theme">
+      <div className="h-screen bg-background">
+        {user ? (
+          <AuthenticatedApp user={user} onLogout={handleLogout} />
+        ) : (
+          <Login onLogin={handleUserLogin} />
+        )}
+
+        <Toaster />
+      </div>
+    </ThemeProvider>
   );
 }
 
