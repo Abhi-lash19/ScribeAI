@@ -1,3 +1,5 @@
+// src/components/chat/authenticated-app.tsx
+
 import {
   AlertDialog,
   AlertDialogAction,
@@ -60,10 +62,15 @@ const AuthenticatedCore = ({ user, onLogout }: AuthenticatedAppProps) => {
 
     try {
       // 1. Create a new channel with the user as the only member
-      const newChannel = client.channel("messaging", uuidv4(), {
-        name: message.text.substring(0, 50),
-        members: [user.id],
-      });
+      const newChannel = client.channel(
+        "messaging",
+        uuidv4(),
+        {
+          name: message.text.substring(0, 50),
+          members: [user.id],
+        } as any // cast to avoid ChannelData strictness
+      );
+
       await newChannel.watch();
 
       // 2. Set up event listener for when AI agent is added as member

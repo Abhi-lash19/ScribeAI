@@ -1,3 +1,5 @@
+// src/App.tsx
+
 import { useState } from "react";
 import type { User } from "stream-chat";
 
