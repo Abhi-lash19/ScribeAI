@@ -13,7 +13,7 @@ import {
 import { Loader2 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import type { Channel, ChannelFilters, ChannelSort, User } from "stream-chat";
+import type { Channel, User } from "stream-chat";
 import { useChatContext } from "stream-chat-react";
 import { v4 as uuidv4 } from "uuid";
 
@@ -154,14 +154,7 @@ const AuthenticatedCore = ({ user, onLogout }: AuthenticatedAppProps) => {
     );
   }
 
-  const filters: ChannelFilters = {
-    type: "messaging",
-    members: { $in: [user.id] },
-  };
-  const sort: ChannelSort = { last_message_at: -1 };
-  const options = { state: true, presence: true, limit: 10 };
-
-  return (
+    return (
     <div className="flex h-full w-full">
       <ChatSidebar
         isOpen={sidebarOpen}
@@ -169,10 +162,8 @@ const AuthenticatedCore = ({ user, onLogout }: AuthenticatedAppProps) => {
         onLogout={onLogout}
         onNewChat={handleNewChatClick}
         onChannelDelete={handleDeleteClick}
-        filters={filters}
-        sort={sort}
-        options={options}
       />
+
       <div className="flex-1 flex flex-col min-w-0">
         <ChatInterface
           onToggleSidebar={() => setSidebarOpen(!sidebarOpen)}

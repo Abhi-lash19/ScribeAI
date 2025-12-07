@@ -15,11 +15,11 @@ import {
   Channel,
   MessageList,
   useAIState,
-  useChannelActionContext,
   useChannelStateContext,
   useChatContext,
   Window,
 } from "stream-chat-react";
+
 
 import { AIAgentControl } from "./ai-agent-control";
 import { ChatInput } from "./chat-input";
@@ -224,8 +224,7 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
     backendUrl,
   });
 
-  const ChannelMessageInputComponent: React.FC = () => {
-    const { sendMessage } = useChannelActionContext();
+    const ChannelMessageInputComponent: React.FC = () => {
     const { channel, messages } = useChannelStateContext();
     const { aiState } = useAIState(channel);
     const [inputText, setInputText] = useState("");
@@ -251,9 +250,14 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
       }
     };
 
+    const handleSendMessage = async ({ text }: { text: string }) => {
+      if (!channel) return;
+      await channel.sendMessage({ text });
+    };
+
     return (
       <ChatInput
-        sendMessage={sendMessage}
+        sendMessage={handleSendMessage}
         value={inputText}
         onValueChange={setInputText}
         textareaRef={textareaRef}
@@ -264,6 +268,7 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
       />
     );
   };
+
 
   return (
     <div className="flex flex-col h-full bg-background">
@@ -289,7 +294,7 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
             </div>
             <div>
               <h2 className="text-sm font-semibold text-foreground">
-                {channel?.data?.name || "New Writing Session"}
+                {(channel?.data as any)?.name || "New Writing Session"}
               </h2>
               <p className="text-xs text-muted-foreground">
                 AI Writing Assistant • Always improving

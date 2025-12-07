@@ -22,7 +22,7 @@ export interface ChatInputProps {
   placeholder?: string;
   value: string;
   onValueChange: (text: string) => void;
-  textareaRef?: React.RefObject<HTMLTextAreaElement>;
+  textareaRef?: React.RefObject<HTMLTextAreaElement | null>;
   showPromptToolbar?: boolean;
 }
 
