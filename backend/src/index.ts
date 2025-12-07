@@ -1,3 +1,5 @@
+// backend/src/index.ts
+
 import cors from "cors";
 import "dotenv/config";
 import express from "express";
@@ -31,7 +33,6 @@ setInterval(async () => {
 app.get("/", (req, res) => {
   res.json({
     message: "AI Writing Assistant Server is running",
-    apiKey: apiKey,
     activeAgents: aiAgentCache.size,
   });
 });
@@ -183,5 +184,5 @@ async function disposeAiAgent(aiAgent: AIAgent) {
 // Start the Express server
 const port = process.env.PORT || 3000;
 app.listen(port, () => {
-  console.log(`Server is running on http://localhost:${port}`);
+  console.log(`Server is running on port ${port}`);
 });
