@@ -1,3 +1,5 @@
+// backend/src/agents/types.ts
+
 import type { Channel, StreamChat, User } from "stream-chat";
 
 export interface AIAgent {

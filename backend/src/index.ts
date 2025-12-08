@@ -2,62 +2,93 @@
 
 import cors from "cors";
 import "dotenv/config";
-import express from "express";
+import express, { NextFunction, Request, Response } from "express";
+import helmet from "helmet";
+import morgan from "morgan";
+
 import { createAgent } from "./agents/createAgent";
 import { AgentPlatform, AIAgent } from "./agents/types";
-import { apiKey, serverClient } from "./serverClient";
+import { config } from "./config";
+import { serverClient, verifyStreamConnection } from "./serverClient";
 
 const app = express();
-app.use(express.json());
-app.use(cors({ origin: "*" }));
 
-// Map to store the AI Agent instances
-// [user_id string]: AI Agent
+// ----- Global middleware -----
+app.use(helmet()); // basic security headers
+app.use(
+  cors({
+    origin: config.corsOrigin,
+    credentials: false,
+  })
+);
+app.use(express.json({ limit: "1mb" }));
+app.use(
+  morgan(config.env === "production" ? "combined" : "dev", {
+    skip: () => config.env === "test",
+  })
+);
+
+// ----- In-memory AI agent cache -----
+// [user_id: string] => AIAgent
 const aiAgentCache = new Map<string, AIAgent>();
 const pendingAiAgents = new Set<string>();
 
-// TODO: temporary set to 8 hours, should be cleaned up at some point
+// Auto-dispose inactive AI agents (8 hours)
 const inactivityThreshold = 480 * 60 * 1000;
-// Periodically check for inactive AI agents and dispose of them
+
 setInterval(async () => {
   const now = Date.now();
   for (const [userId, aiAgent] of aiAgentCache) {
     if (now - aiAgent.getLastInteraction() > inactivityThreshold) {
       console.log(`Disposing AI Agent due to inactivity: ${userId}`);
-      await disposeAiAgent(aiAgent);
+      try {
+        await disposeAiAgent(aiAgent);
+      } catch (err) {
+        console.error(
+          `Error while disposing inactive AI agent ${userId}:`,
+          err
+        );
+      }
       aiAgentCache.delete(userId);
     }
   }
-}, 5000);
+}, 5_000);
 
-app.get("/", (req, res) => {
+// ----- Routes -----
+
+// Simple health / status endpoint
+app.get("/", (_req, res) => {
   res.json({
     message: "AI Writing Assistant Server is running",
+    env: config.env,
     activeAgents: aiAgentCache.size,
   });
 });
 
 /**
- * Handle the request to start the AI Agent
+ * Start the AI Agent for a given channel.
  */
-app.post("/start-ai-agent", async (req, res) => {
-  const { channel_id, channel_type = "messaging" } = req.body;
+app.post("/start-ai-agent", async (req, res, next) => {
+  const { channel_id, channel_type = "messaging" } = req.body as {
+    channel_id?: string;
+    channel_type?: string;
+  };
+
   console.log(`[API] /start-ai-agent called for channel: ${channel_id}`);
 
-  // Simple validation
   if (!channel_id) {
-    res.status(400).json({ error: "Missing required fields" });
-    return;
+    return res.status(400).json({ error: "Missing required field channel_id" });
   }
 
-  const user_id = `ai-bot-${channel_id.replace(/[!]/g, "")}`;
+  const safeChannelId = channel_id.replace(/[!]/g, "");
+  const user_id = `ai-bot-${safeChannelId}`;
 
   try {
-    // Prevent multiple agents from being created for the same channel simultaneously
     if (!aiAgentCache.has(user_id) && !pendingAiAgents.has(user_id)) {
       console.log(`[API] Creating new agent for ${user_id}`);
       pendingAiAgents.add(user_id);
 
+      // Ensure the AI bot user exists in Stream
       await serverClient.upsertUser({
         id: user_id,
         name: "AI Writing Assistant",
@@ -74,9 +105,12 @@ app.post("/start-ai-agent", async (req, res) => {
       );
 
       await agent.init();
-      // Final check to prevent race conditions where an agent might have been added
-      // while this one was initializing.
+
+      // If another init won the race, dispose this one
       if (aiAgentCache.has(user_id)) {
+        console.warn(
+          `[API] Agent for ${user_id} already exists, disposing duplicate`
+        );
         await agent.dispose();
       } else {
         aiAgentCache.set(user_id, agent);
@@ -87,23 +121,27 @@ app.post("/start-ai-agent", async (req, res) => {
 
     res.json({ message: "AI Agent started", data: [] });
   } catch (error) {
-    const errorMessage = (error as Error).message;
-    console.error("Failed to start AI Agent", errorMessage);
-    res
-      .status(500)
-      .json({ error: "Failed to start AI Agent", reason: errorMessage });
+    console.error("Failed to start AI Agent", error);
+    next(error);
   } finally {
     pendingAiAgents.delete(user_id);
   }
 });
 
 /**
- * Handle the request to stop the AI Agent
+ * Stop the AI Agent for a given channel.
  */
-app.post("/stop-ai-agent", async (req, res) => {
-  const { channel_id } = req.body;
+app.post("/stop-ai-agent", async (req, res, next) => {
+  const { channel_id } = req.body as { channel_id?: string };
+
   console.log(`[API] /stop-ai-agent called for channel: ${channel_id}`);
+
+  if (!channel_id) {
+    return res.status(400).json({ error: "Missing required field channel_id" });
+  }
+
   const user_id = `ai-bot-${channel_id.replace(/[!]/g, "")}`;
+
   try {
     const aiAgent = aiAgentCache.get(user_id);
     if (aiAgent) {
@@ -115,40 +153,47 @@ app.post("/stop-ai-agent", async (req, res) => {
     }
     res.json({ message: "AI Agent stopped", data: [] });
   } catch (error) {
-    const errorMessage = (error as Error).message;
-    console.error("Failed to stop AI Agent", errorMessage);
-    res
-      .status(500)
-      .json({ error: "Failed to stop AI Agent", reason: errorMessage });
+    console.error("Failed to stop AI Agent", error);
+    next(error);
   }
 });
 
+/**
+ * Check agent status for a channel.
+ */
 app.get("/agent-status", (req, res) => {
-  const { channel_id } = req.query;
+  const channel_id = req.query.channel_id;
+
   if (!channel_id || typeof channel_id !== "string") {
     return res.status(400).json({ error: "Missing channel_id" });
   }
+
   const user_id = `ai-bot-${channel_id.replace(/[!]/g, "")}`;
+
   console.log(
     `[API] /agent-status called for channel: ${channel_id} (user: ${user_id})`
   );
 
   if (aiAgentCache.has(user_id)) {
     console.log(`[API] Status for ${user_id}: connected`);
-    res.json({ status: "connected" });
-  } else if (pendingAiAgents.has(user_id)) {
-    console.log(`[API] Status for ${user_id}: connecting`);
-    res.json({ status: "connecting" });
-  } else {
-    console.log(`[API] Status for ${user_id}: disconnected`);
-    res.json({ status: "disconnected" });
+    return res.json({ status: "connected" });
   }
+
+  if (pendingAiAgents.has(user_id)) {
+    console.log(`[API] Status for ${user_id}: connecting`);
+    return res.json({ status: "connecting" });
+  }
+
+  console.log(`[API] Status for ${user_id}: disconnected`);
+  return res.json({ status: "disconnected" });
 });
 
-// Token provider endpoint - generates secure tokens
-app.post("/token", async (req, res) => {
+/**
+ * Token provider endpoint - generates user tokens.
+ */
+app.post("/token", async (req, res, next) => {
   try {
-    const { userId } = req.body;
+    const { userId } = req.body as { userId?: string };
 
     if (!userId) {
       return res.status(400).json({
@@ -156,33 +201,67 @@ app.post("/token", async (req, res) => {
       });
     }
 
-    // Create token with expiration (1 hour) and issued at time for security
     const issuedAt = Math.floor(Date.now() / 1000);
-    const expiration = issuedAt + 60 * 60; // 1 hour from now
+    const expiration = issuedAt + 60 * 60; // 1 hour
 
     const token = serverClient.createToken(userId, expiration, issuedAt);
 
-    res.json({ token });
+    res.json({ token, apiKey: config.stream.apiKey });
   } catch (error) {
     console.error("Error generating token:", error);
-    res.status(500).json({
-      error: "Failed to generate token",
-    });
+    next(error);
   }
 });
 
+// ----- Helpers -----
+
 async function disposeAiAgent(aiAgent: AIAgent) {
   await aiAgent.dispose();
-  if (!aiAgent.user) {
-    return;
-  }
+  if (!aiAgent.user) return;
+
   await serverClient.deleteUser(aiAgent.user.id, {
     hard_delete: true,
   });
 }
 
-// Start the Express server
-const port = process.env.PORT || 3000;
-app.listen(port, () => {
-  console.log(`Server is running on port ${port}`);
+// ----- 404 + error handlers -----
+
+app.use((_req, res) => {
+  res.status(404).json({ error: "Not found" });
 });
+
+app.use(
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  (err: unknown, _req: Request, res: Response, _next: NextFunction) => {
+    console.error("[ERROR] Unhandled error:", err);
+
+    // Avoid leaking internals in production
+    if (config.env === "production") {
+      return res.status(500).json({ error: "Internal server error" });
+    }
+
+    return res.status(500).json({
+      error: "Internal server error",
+      details: err instanceof Error ? err.message : String(err),
+    });
+  }
+);
+
+// ----- Startup -----
+
+async function start() {
+  try {
+    await verifyStreamConnection();
+
+    app.listen(config.port, () => {
+      console.log(
+        `Server is running on port ${config.port} (env=${config.env})`
+      );
+    });
+  } catch (err) {
+    console.error("Fatal error during startup, exiting.", err);
+    process.exit(1);
+  }
+}
+
+start();

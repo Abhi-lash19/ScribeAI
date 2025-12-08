@@ -1,6 +1,10 @@
+// backend/src/agents/openai/OpenAIAgent.ts
+
 import OpenAI from "openai";
 import type { Channel, DefaultGenerics, Event, StreamChat } from "stream-chat";
+
 import type { AIAgent } from "../types";
+import { config } from "../../config";
 import { OpenAIResponseHandler } from "./OpenAIResponseHandler";
 
 export class OpenAIAgent implements AIAgent {
@@ -8,7 +12,6 @@ export class OpenAIAgent implements AIAgent {
   private assistant?: OpenAI.Beta.Assistants.Assistant;
   private openAiThread?: OpenAI.Beta.Threads.Thread;
   private lastInteractionTs = Date.now();
-
   private handlers: OpenAIResponseHandler[] = [];
 
   constructor(
@@ -18,10 +21,11 @@ export class OpenAIAgent implements AIAgent {
 
   dispose = async () => {
     this.chatClient.off("message.new", this.handleMessage);
-    await this.chatClient.disconnectUser();
 
     this.handlers.forEach((handler) => handler.dispose());
     this.handlers = [];
+
+    await this.chatClient.disconnectUser();
   };
 
   get user() {
@@ -31,12 +35,10 @@ export class OpenAIAgent implements AIAgent {
   getLastInteraction = (): number => this.lastInteractionTs;
 
   init = async () => {
-    const apiKey = process.env.OPENAI_API_KEY as string | undefined;
-    if (!apiKey) {
-      throw new Error("OpenAI API key is required");
-    }
+    // Uses validated config; if missing, app would already have crashed on startup.
+    this.openai = new OpenAI({ apiKey: config.openaiApiKey });
 
-    this.openai = new OpenAI({ apiKey });
+    // In a more advanced version you could re-use an existing assistant via env var.
     this.assistant = await this.openai.beta.assistants.create({
       name: "AI Writing Assistant",
       instructions: this.getWritingAssistantPrompt(),
@@ -64,6 +66,7 @@ export class OpenAIAgent implements AIAgent {
       ],
       temperature: 0.7,
     });
+
     this.openAiThread = await this.openai.beta.threads.create();
 
     this.chatClient.on("message.new", this.handleMessage);
@@ -93,7 +96,9 @@ export class OpenAIAgent implements AIAgent {
 - Never begin responses with phrases like "Here's the edit:", "Here are the changes:", or similar introductory statements.
 - Provide responses directly and professionally without unnecessary preambles.
 
-**Writing Context**: ${context || "General writing assistance."}
+**Writing Context**: ${
+      context || "General writing assistance."
+    }
 
 Your goal is to provide accurate, current, and helpful written content. Failure to use web search for recent topics will result in an incorrect answer.`;
   };
@@ -139,6 +144,8 @@ Your goal is to provide accurate, current, and helpful written content. Failure 
       this.openAiThread.id,
       {
         assistant_id: this.assistant.id,
+        // propagate updated instructions per message if needed
+        instructions,
       }
     );
 
@@ -151,6 +158,7 @@ Your goal is to provide accurate, current, and helpful written content. Failure 
       channelMessage,
       () => this.removeHandler(handler)
     );
+
     this.handlers.push(handler);
     void handler.run();
   };

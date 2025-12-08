@@ -1,3 +1,5 @@
+// backend/src/agents/openai/OpenAIResponseHandler.ts
+
 import OpenAI from "openai";
 import type { AssistantStream } from "openai/lib/AssistantStream";
 import type { Channel, Event, MessageResponse, StreamChat } from "stream-chat";
@@ -211,7 +213,7 @@ export class OpenAIResponseHandler {
     await this.dispose();
   };
 
-  private performWebSearch = async (query: string): Promise<string> => {
+    private performWebSearch = async (query: string): Promise<string> => {
     const TAVILY_API_KEY = process.env.TAVILY_API_KEY;
 
     if (!TAVILY_API_KEY) {
