@@ -20,17 +20,7 @@ export async function verifyStreamConnection() {
 
   try {
     const start = Date.now();
-
-    // Upsert a tiny temporary user to validate API key + secret
-    await serverClient.upsertUser({
-      id: healthUserId,
-      name: "Health Check",
-    });
-
-    // Clean up immediately
-    await serverClient.deleteUser(healthUserId, {
-      hard_delete: true,
-    });
+    await serverClient.getAppSettings();
 
     const duration = Date.now() - start;
 

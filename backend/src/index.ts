@@ -272,7 +272,15 @@ app.use(
 
 async function start() {
   try {
-    await verifyStreamConnection();
+    try {
+      await verifyStreamConnection();
+      console.log("✅ Stream health check passed");
+    } catch (err) {
+      console.error(
+        "⚠️ Stream health check failed — starting server anyway",
+        err
+      );
+    }
 
     app.listen(config.port, () => {
       console.log(
@@ -280,9 +288,10 @@ async function start() {
       );
     });
   } catch (err) {
-    console.error("Fatal error during startup, exiting.", err);
+    console.error("Fatal error during startup", err);
     process.exit(1);
   }
 }
+
 
 start();
