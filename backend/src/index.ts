@@ -17,10 +17,26 @@ const app = express();
 app.use(helmet()); // basic security headers
 app.use(
   cors({
-    origin: config.corsOrigin,
+    origin(origin, callback) {
+      // Allow server-to-server / curl / Railway health checks
+      if (!origin) return callback(null, true);
+
+      if (config.corsOrigin.includes(origin)) {
+        return callback(null, true);
+      }
+
+      console.warn("❌ CORS blocked origin:", origin);
+      return callback(new Error("Not allowed by CORS"));
+    },
     credentials: false,
+    methods: ["GET", "POST", "OPTIONS"],
+    allowedHeaders: ["Content-Type", "Authorization"],
   })
 );
+
+// THIS LINE FIXES OUR 502
+app.options("*", cors());
+
 app.use(express.json({ limit: "1mb" }));
 app.use(
   morgan(config.env === "production" ? "combined" : "dev", {
@@ -186,6 +202,11 @@ app.get("/agent-status", (req, res) => {
 
   console.log(`[API] Status for ${user_id}: disconnected`);
   return res.json({ status: "disconnected" });
+});
+
+// Explicit preflight handler for /token
+app.options("/token", (_req, res) => {
+  res.sendStatus(200);
 });
 
 /**

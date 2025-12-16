@@ -15,7 +15,11 @@ export const config = {
 
   // Server
   port: Number(process.env.PORT ?? 3000),
-  corsOrigin: process.env.CORS_ORIGIN ?? "*",
+  corsOrigin: (process.env.CORS_ORIGIN ?? "")
+  .split(",")
+  .map(o => o.trim())
+  .filter(Boolean),
+
 
   // Stream Chat
   stream: {
