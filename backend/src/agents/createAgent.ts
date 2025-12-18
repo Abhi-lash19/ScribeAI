@@ -4,6 +4,8 @@ import { StreamChat } from "stream-chat";
 import { apiKey, serverClient } from "../serverClient";
 import { OpenAIAgent } from "./openai/OpenAIAgent";
 import { AgentPlatform, AIAgent } from "./types";
+import { GroqAgent } from "./groq/GroqAgent";
+
 
 export const createAgent = async (
   user_id: string,
@@ -23,9 +25,13 @@ export const createAgent = async (
   await channel.watch();
 
   switch (platform) {
+    case AgentPlatform.GROQ:
+      return new GroqAgent(chatClient, channel);
+
     case AgentPlatform.WRITING_ASSISTANT:
     case AgentPlatform.OPENAI:
       return new OpenAIAgent(chatClient, channel);
+
     default:
       throw new Error(`Unsupported agent platform: ${platform}`);
   }

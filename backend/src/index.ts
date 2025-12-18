@@ -68,7 +68,7 @@ setInterval(async () => {
       aiAgentCache.delete(userId);
     }
   }
-}, 5_000);
+}, 60_000);
 
 // ----- Routes -----
 
@@ -115,7 +115,7 @@ app.post("/start-ai-agent", async (req, res, next) => {
 
       const agent = await createAgent(
         user_id,
-        AgentPlatform.OPENAI,
+        AgentPlatform.GROQ,
         channel_type,
         channel_id
       );

@@ -27,8 +27,9 @@ export const config = {
     apiSecret: requireEnv("STREAM_API_SECRET"),
   },
 
-  // OpenAI
-  openaiApiKey: requireEnv("OPENAI_API_KEY"),
+  // LLM providers
+  openaiApiKey: process.env.OPENAI_API_KEY ?? null,
+  groqApiKey: process.env.GROQ_API_KEY ?? null,
 
   // Tavily (optional, we allow it to be missing and just disable web search)
   tavilyApiKey: process.env.TAVILY_API_KEY ?? null,
