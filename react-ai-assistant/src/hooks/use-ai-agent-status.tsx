@@ -14,7 +14,7 @@ export const useAIAgentStatus = ({
   backendUrl,
 }: UseAIAgentStatusProps) => {
   // Start with "disconnected" and determine status via effects
-  const [status, setStatus] = useState<AgentStatus>("disconnected");
+  const [status, setStatus] = useState<AgentStatus>("connecting");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -49,46 +49,12 @@ export const useAIAgentStatus = ({
     await checkStatus();
   }, [checkStatus]);
 
-  // Connect AI agent
+  // AI agent is auto-started by AuthenticatedApp.
+  // This hook only reflects backend status.
   const connectAgent = useCallback(async () => {
-    if (!channelId || loading) return;
+    return;
+  }, []);
 
-    setLoading(true);
-    setError(null);
-    setStatus("connecting"); // Optimistic update
-
-    try {
-      const response = await fetch(`${backendUrl}/start-ai-agent`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          channel_id: channelId,
-          channel_type: "messaging",
-        }),
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        console.error(
-          `[useAIAgentStatus] Failed to start agent for ${channelId}:`,
-          errorData.reason
-        );
-        setError(errorData.reason || "Failed to start AI agent");
-        setStatus("disconnected"); // Revert on failure
-      }
-    } catch (err) {
-      console.error(
-        `[useAIAgentStatus] Network error starting AI agent for ${channelId}:`,
-        err
-      );
-      setError("Network error starting AI agent");
-      setStatus("disconnected"); // Revert on failure
-    } finally {
-      await checkStatus();
-    }
-  }, [channelId, backendUrl, loading, checkStatus]);
 
   // Disconnect AI agent
   const disconnectAgent = useCallback(async () => {

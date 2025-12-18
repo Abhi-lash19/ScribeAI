@@ -72,7 +72,7 @@ const AuthenticatedCore = ({ user, onLogout }: AuthenticatedAppProps) => {
     if (!user.id || !client) return;
 
     try {
-      // 1. Create a new channel with the user as the only member
+      // create new channel
       const newChannel = client.channel(
         "messaging",
         uuidv4(),
@@ -82,13 +82,31 @@ const AuthenticatedCore = ({ user, onLogout }: AuthenticatedAppProps) => {
         } as any // cast to avoid ChannelData strictness
       );
 
+
+      // connect to channel
       await newChannel.watch();
 
-      // 2. Set the channel as active and navigate
+      // start AI agent
+      await fetch(`${backendUrl}/start-ai-agent`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          channel_id: newChannel.id,
+          channel_type: "messaging",
+        }),
+      });
+
+
+      // wait briefly so GroqAgent listener is attached
+      await new Promise((res) => setTimeout(res, 300));
+
+      //send user message
+      await newChannel.sendMessage(message);
+
+      // show chat in UI
       setActiveChannel(newChannel);
       navigate(`/chat/${newChannel.id}`);
 
-      await newChannel.sendMessage(message);
 
     } catch (error) {
       const errorMessage =
