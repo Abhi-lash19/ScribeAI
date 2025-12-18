@@ -36,7 +36,7 @@ export class OpenAIAgent implements AIAgent {
 
   init = async () => {
     // Uses validated config; if missing, app would already have crashed on startup.
-    this.openai = new OpenAI({ apiKey: config.openaiApiKey });
+    this.openai = new OpenAI({ apiKey: config.openaiApiKey || undefined });
 
     // In a more advanced version you could re-use an existing assistant via env var.
     this.assistant = await this.openai.beta.assistants.create({

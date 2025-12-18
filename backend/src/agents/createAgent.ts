@@ -30,7 +30,7 @@ export const createAgent = async (
 
     case AgentPlatform.WRITING_ASSISTANT:
     case AgentPlatform.OPENAI:
-      return new OpenAIAgent(chatClient, channel);
+      throw new Error("OpenAI agent is disabled. Use GROQ instead.");
 
     default:
       throw new Error(`Unsupported agent platform: ${platform}`);

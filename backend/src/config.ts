@@ -28,7 +28,7 @@ export const config = {
   },
 
   // LLM providers
-  openaiApiKey: process.env.OPENAI_API_KEY ?? null,
+  openaiApiKey: process.env.OPENAI_API_KEY || undefined,
   groqApiKey: process.env.GROQ_API_KEY ?? null,
 
   // Tavily (optional, we allow it to be missing and just disable web search)
