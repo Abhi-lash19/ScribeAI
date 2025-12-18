@@ -42,20 +42,31 @@ const AuthenticatedCore = ({ user, onLogout }: AuthenticatedAppProps) => {
   const backendUrl = import.meta.env.VITE_BACKEND_URL as string;
 
   useEffect(() => {
-    const syncChannelWithUrl = async () => {
-      if (!client) return;
+  const syncChannelWithUrl = async () => {
+    if (!client) return;
 
-      if (channelId) {
-        const channel = client.channel("messaging", channelId);
-        await channel.watch();
-        setActiveChannel(channel);
-      } else {
-        setActiveChannel(undefined);
-      }
-    };
+    if (channelId) {
+      const channel = client.channel("messaging", channelId);
+      await channel.watch();
+      setActiveChannel(channel);
 
-    syncChannelWithUrl();
-  }, [channelId, client, setActiveChannel]);
+      // 🔥 Ensure AI agent is started for this channel
+      await fetch(`${backendUrl}/start-ai-agent`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          channel_id: channelId,
+          channel_type: "messaging",
+        }),
+      });
+    } else {
+      setActiveChannel(undefined);
+    }
+  };
+
+  syncChannelWithUrl();
+}, [channelId, client, setActiveChannel, backendUrl]);
+
 
   const handleNewChatMessage = async (message: { text: string }) => {
     if (!user.id || !client) return;
@@ -73,38 +84,12 @@ const AuthenticatedCore = ({ user, onLogout }: AuthenticatedAppProps) => {
 
       await newChannel.watch();
 
-      // 2. Set up event listener for when AI agent is added as member
-      const memberAddedPromise = new Promise<void>((resolve) => {
-        const unsubscribe = newChannel.on("member.added", (event) => {
-          // Check if the added member is the AI agent (not the current user)
-          if (event.member?.user?.id && event.member.user.id !== user.id) {
-            unsubscribe.unsubscribe();
-            resolve();
-          }
-        });
-      });
-
-      // 3. Connect the AI agent
-      const response = await fetch(`${backendUrl}/start-ai-agent`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          channel_id: newChannel.id,
-          channel_type: "messaging",
-        }),
-      });
-
-      if (!response.ok) {
-        throw new Error("AI agent failed to join the chat.");
-      }
-
-      // 4. Set the channel as active and navigate
+      // 2. Set the channel as active and navigate
       setActiveChannel(newChannel);
       navigate(`/chat/${newChannel.id}`);
 
-      // 5. Wait for AI agent to be added as member, then send message
-      await memberAddedPromise;
       await newChannel.sendMessage(message);
+
     } catch (error) {
       const errorMessage =
         error instanceof Error ? error.message : "Something went wrong";
