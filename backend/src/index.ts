@@ -5,9 +5,11 @@ import "dotenv/config";
 import express, { NextFunction, Request, Response } from "express";
 import helmet from "helmet";
 import morgan from "morgan";
+
 import { streamWebhook } from "./routes/streamWebhook";
 import { config } from "./config";
 import { verifyStreamConnection } from "./serverClient";
+import { serverClient } from "./serverClient";
 
 const app = express();
 
@@ -38,6 +40,29 @@ app.use(
 
 // ----- Webhook -----
 app.post("/webhooks/stream", streamWebhook());
+
+app.post("/token", async (req, res) => {
+  const { userId } = req.body as { userId?: string };
+
+  if (!userId) {
+    return res.status(400).json({ error: "userId is required" });
+  }
+
+  const issuedAt = Math.floor(Date.now() / 1000);
+  const expiration = issuedAt + 60 * 60; // 1 hour
+
+  const token = serverClient.createToken(
+    userId,
+    expiration,
+    issuedAt
+  );
+
+  return res.json({
+    token,
+    apiKey: config.stream.apiKey,
+  });
+});
+
 
 // ----- Health -----
 app.get("/", (_req, res) => {
