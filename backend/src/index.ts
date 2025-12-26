@@ -5,6 +5,7 @@ import "dotenv/config";
 import express, { NextFunction, Request, Response } from "express";
 import helmet from "helmet";
 import morgan from "morgan";
+import { streamWebhook } from "./routes/streamWebhook";
 
 import { createAgent } from "./agents/createAgent";
 import { AgentPlatform, AIAgent } from "./agents/types";
@@ -48,6 +49,11 @@ app.use(
 // [user_id: string] => AIAgent
 const aiAgentCache = new Map<string, AIAgent>();
 const pendingAiAgents = new Set<string>();
+
+app.post(
+  "/webhooks/stream",
+  streamWebhook()
+);
 
 // Auto-dispose inactive AI agents (8 hours)
 const inactivityThreshold = 480 * 60 * 1000;

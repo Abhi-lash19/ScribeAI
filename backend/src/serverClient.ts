@@ -16,22 +16,22 @@ export const serverClient = new StreamChat(apiKey, apiSecret);
  * Called once during startup so we fail fast if credentials are wrong.
  */
 export async function verifyStreamConnection() {
-  const healthUserId = "__healthcheck__";
-
   try {
     const start = Date.now();
+
+    // This call does NOT touch users at all
     await serverClient.getAppSettings();
 
-    const duration = Date.now() - start;
-
     console.log(
-      `[StreamChat] health check ok: duration=${duration} ms, apiKey ending=${apiKey.slice(
-        -6
-      )}`
+      `[StreamChat] health check OK (${Date.now() - start} ms)`
     );
   } catch (err) {
     console.error("[StreamChat] health check FAILED", err);
-    // Rethrow so the process exits during startup instead of returning 502s later.
-    throw err;
+
+    // ❗ DO NOT crash app in dev
+    if (process.env.NODE_ENV === "production") {
+      throw err;
+    }
   }
 }
+
