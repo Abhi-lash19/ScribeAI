@@ -39,79 +39,43 @@ const AuthenticatedCore = ({ user, onLogout }: AuthenticatedAppProps) => {
   const { client, setActiveChannel } = useChatContext();
   const navigate = useNavigate();
   const { channelId } = useParams<{ channelId: string }>();
-  const backendUrl = import.meta.env.VITE_BACKEND_URL as string;
 
   useEffect(() => {
-  const syncChannelWithUrl = async () => {
-    if (!client) return;
+    const syncChannelWithUrl = async () => {
+      if (!client) return;
 
-    if (channelId) {
-      const channel = client.channel("messaging", channelId);
-      await channel.watch();
-      setActiveChannel(channel);
+      if (channelId) {
+        const channel = client.channel("messaging", channelId);
+        await channel.watch();
+        setActiveChannel(channel);
+      } else {
+        setActiveChannel(undefined);
+      }
+    };
 
-      // 🔥 Ensure AI agent is started for this channel
-      await fetch(`${backendUrl}/start-ai-agent`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          channel_id: channelId,
-          channel_type: "messaging",
-        }),
-      });
-    } else {
-      setActiveChannel(undefined);
-    }
-  };
-
-  syncChannelWithUrl();
-}, [channelId, client, setActiveChannel, backendUrl]);
-
+    syncChannelWithUrl();
+  }, [channelId, client, setActiveChannel]);
 
   const handleNewChatMessage = async (message: { text: string }) => {
     if (!user.id || !client) return;
 
     try {
-      // create new channel
       const newChannel = client.channel(
         "messaging",
         uuidv4(),
         {
           name: message.text.substring(0, 50),
           members: [user.id],
-        } as any // cast to avoid ChannelData strictness
+        } as any
       );
 
-
-      // connect to channel
       await newChannel.watch();
-
-      // start AI agent
-      await fetch(`${backendUrl}/start-ai-agent`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          channel_id: newChannel.id,
-          channel_type: "messaging",
-        }),
-      });
-
-
-      // wait briefly so GroqAgent listener is attached
-      await new Promise((res) => setTimeout(res, 300));
-
-      //send user message
       await newChannel.sendMessage(message);
 
-      // show chat in UI
       setActiveChannel(newChannel);
       navigate(`/chat/${newChannel.id}`);
-
-
     } catch (error) {
-      const errorMessage =
-        error instanceof Error ? error.message : "Something went wrong";
-      console.error("Error creating new chat:", errorMessage);
+      console.error("Error creating new chat:", error);
     }
   };
 
@@ -141,11 +105,6 @@ const AuthenticatedCore = ({ user, onLogout }: AuthenticatedAppProps) => {
     setChannelToDelete(null);
   };
 
-  const handleDeleteCancel = () => {
-    setShowDeleteDialog(false);
-    setChannelToDelete(null);
-  };
-
   if (!client) {
     return (
       <div className="flex items-center justify-center h-screen bg-background">
@@ -157,7 +116,7 @@ const AuthenticatedCore = ({ user, onLogout }: AuthenticatedAppProps) => {
     );
   }
 
-    return (
+  return (
     <div className="flex h-full w-full">
       <ChatSidebar
         isOpen={sidebarOpen}
@@ -171,29 +130,21 @@ const AuthenticatedCore = ({ user, onLogout }: AuthenticatedAppProps) => {
         <ChatInterface
           onToggleSidebar={() => setSidebarOpen(!sidebarOpen)}
           onNewChatMessage={handleNewChatMessage}
-          backendUrl={backendUrl}
         />
       </div>
 
-      {/* Delete Chat Confirmation Dialog */}
       <AlertDialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Delete Writing Session</AlertDialogTitle>
             <AlertDialogDescription>
-              Are you sure you want to delete this writing session? This action
-              cannot be undone and all content will be permanently deleted.
+              This will permanently delete the conversation.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel onClick={handleDeleteCancel}>
-              Cancel
-            </AlertDialogCancel>
-            <AlertDialogAction
-              onClick={handleDeleteConfirm}
-              className="bg-red-600 hover:bg-red-700 focus:ring-red-600"
-            >
-              Delete Session
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={handleDeleteConfirm}>
+              Delete
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
