@@ -66,6 +66,13 @@ export function streamWebhook() {
     if (processedMessages.has(message.id)) {
       return res.json({ ok: true });
     }
+    processedMessages.set(message.id, Date.now());
+    cleanupCache();
+
+    if (processedMessages.size > MAX_CACHE_SIZE) {
+      const oldest = processedMessages.keys().next().value;
+      if (oldest) processedMessages.delete(oldest);
+    }
 
     // ✅ FIX: Map uses set(), not add()
     processedMessages.set(message.id, Date.now());
