@@ -1,18 +1,27 @@
 // backend/src/services/streamService.ts
 
-import { StreamChat } from "stream-chat";
+import { serverClient } from "../serverClient";
 
-export const streamClient = StreamChat.getInstance(
-  process.env.STREAM_API_KEY!,
-  process.env.STREAM_API_SECRET!
-);
+export const streamClient = serverClient;
+
 
 const AI_USER_PREFIX = "ai-bot-";
+
+async function ensureAIUser(userId: string) {
+  await streamClient.upsertUser({
+    id: userId,
+    name: "AI Assistant",
+    role: "admin",
+  });
+}
+
 
 /**
  * Start typing indicator
  */
 export async function startTyping(channelId: string) {
+  const userId = `${AI_USER_PREFIX}${channelId}`;
+  await ensureAIUser(userId);
   const channel = streamClient.channel("messaging", channelId);
   await channel.sendEvent({
     type: "typing.start",
@@ -24,6 +33,8 @@ export async function startTyping(channelId: string) {
  * Stop typing indicator
  */
 export async function stopTyping(channelId: string) {
+  const userId = `${AI_USER_PREFIX}${channelId}`;
+  await ensureAIUser(userId);
   const channel = streamClient.channel("messaging", channelId);
   await channel.sendEvent({
     type: "typing.stop",
@@ -38,6 +49,9 @@ export async function sendAIMessage(
   channelId: string,
   text: string
 ) {
+
+  const userId = `${AI_USER_PREFIX}${channelId}`;
+  await ensureAIUser(userId);
   const channel = streamClient.channel("messaging", channelId);
 
   return channel.sendMessage({
@@ -52,6 +66,9 @@ export async function sendAIMessage(
 export async function sendThinkingMessage(
   channelId: string
 ): Promise<string> {
+
+  const userId = `${AI_USER_PREFIX}${channelId}`;
+  await ensureAIUser(userId);
   const channel = streamClient.channel("messaging", channelId);
 
   const response = await channel.sendMessage({

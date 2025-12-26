@@ -43,68 +43,78 @@ function verifyStreamSignature(_req: Request): boolean {
  * Stream webhook middleware
  */
 export function streamWebhook() {
-  return async (req: Request, res: Response) => {
-    // ACK immediately to prevent retries
-    res.status(200).json({ ok: true });
-
-    if (!verifyStreamSignature(req)) {
-      // intentionally NOT blocking
-    }
-
+  return async function handler(req: Request, res: Response) {
     const event = req.body;
 
-    if (event.type !== "message.new") {
-      return;
+    if (event?.type !== "message.new") {
+      return res.json({ ok: true });
     }
 
-    const { message, channel } = event;
+    const message = event.message;
+    const channel = event.channel;
+
     if (!message?.text || !channel?.id) {
-      return;
+      return res.json({ ok: true });
     }
 
     // Ignore AI messages
     if (message.user?.id?.startsWith("ai-bot-")) {
-      return;
+      return res.json({ ok: true });
     }
 
-    // Retry-safe dedupe
+    // Retry protection
     if (processedMessages.has(message.id)) {
-      return;
+      return res.json({ ok: true });
     }
 
+    // ✅ FIX: Map uses set(), not add()
     processedMessages.set(message.id, Date.now());
-    cleanupCache();
 
     if (processedMessages.size > MAX_CACHE_SIZE) {
-      const oldest = processedMessages.keys().next().value;
-      if (oldest) processedMessages.delete(oldest);
+      cleanupCache();
     }
 
     const channelId = channel.id;
 
     if (isRateLimited(channelId)) {
-      console.warn(`⏱️ Rate limited channel ${channelId}`);
-      return;
+      return res.json({ ok: true });
     }
 
     let thinkingMessageId: string | null = null;
 
     try {
       await startTyping(channelId);
+
       thinkingMessageId = await sendThinkingMessage(channelId);
 
-      const reply = await generateAIResponse(message.text);
+      const aiReply = await generateAIResponse(message.text);
 
       if (thinkingMessageId) {
-        await deleteMessage(thinkingMessageId);
+        try {
+          await deleteMessage(thinkingMessageId);
+        } catch (err) {
+          console.warn(
+            "[Stream] Failed to delete thinking message",
+            thinkingMessageId,
+            err
+          );
+        }
       }
 
-      await sendAIMessage(channelId, reply);
+      await sendAIMessage(channelId, aiReply);
     } catch (err) {
-      console.error("Webhook AI error:", err);
+      console.error("AI webhook error:", err);
 
       if (thinkingMessageId) {
-        await deleteMessage(thinkingMessageId);
+        try {
+          await deleteMessage(thinkingMessageId);
+        } catch (err) {
+          console.warn(
+            "[Stream] Failed to delete thinking message",
+            thinkingMessageId,
+            err
+          );
+        }
       }
 
       await sendAIMessage(
@@ -114,5 +124,7 @@ export function streamWebhook() {
     } finally {
       await stopTyping(channelId);
     }
+
+    return res.json({ ok: true });
   };
 }
