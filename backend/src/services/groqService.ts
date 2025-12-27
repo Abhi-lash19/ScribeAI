@@ -6,37 +6,107 @@ const groq = new Groq({
   apiKey: process.env.GROQ_API_KEY!,
 });
 
-export async function generateAIResponse(
-  prompt: string
-): Promise<string> {
+type Intent =
+  | "write"
+  | "rephrase"
+  | "summarize"
+  | "explain"
+  | "generic";
+
+function detectIntent(prompt: string): Intent {
+  const p = prompt.toLowerCase();
+
+  if (
+    p.startsWith("write") ||
+    p.includes("email") ||
+    p.includes("post")
+  ) {
+    return "write";
+  }
+
+  if (
+    p.startsWith("rephrase") ||
+    p.includes("fix grammar") ||
+    p.includes("make this")
+  ) {
+    return "rephrase";
+  }
+
+  if (p.startsWith("summarize") || p.includes("summary")) {
+    return "summarize";
+  }
+
+  if (
+    p.startsWith("what is") ||
+    p.startsWith("define") ||
+    p.startsWith("explain") ||
+    p.includes("in simple terms")
+  ) {
+    return "explain";
+  }
+
+  return "generic";
+}
+
+function buildSystemPrompt(intent: Intent) {
+  switch (intent) {
+    case "write":
+      return `
+You are a professional writing assistant.
+Produce final, ready-to-use content.
+Do not explain your reasoning.
+Do not add extra commentary.
+Sound confident, natural, and human.
+`;
+
+    case "rephrase":
+      return `
+Rewrite the text to improve clarity and tone.
+Preserve the original meaning.
+Return only the rewritten version.
+`;
+
+    case "summarize":
+      return `
+Summarize the content into clear bullet points.
+Focus only on key ideas.
+`;
+
+    case "explain":
+      return `
+Explain in very simple terms.
+Assume the user is non-technical.
+Keep it short unless the user asks for detail.
+`;
+
+    default:
+      return `
+Be helpful, direct, and concise.
+Avoid generic or textbook-style explanations.
+`;
+  }
+}
+
+export async function generateAIResponse(prompt: string): Promise<string> {
+  const intent = detectIntent(prompt);
+
   try {
     const completion = await groq.chat.completions.create({
       model: "llama-3.3-70b-versatile",
-      temperature: 0.7,
-      max_tokens: 600,
+      temperature: intent === "write" ? 0.65 : 0.35,
+      max_tokens: intent === "write" ? 700 : 300,
       messages: [
-        {
-          role: "system",
-          content:
-            "You are a professional AI writing assistant. Respond clearly, concisely, and professionally.",
-        },
-        {
-          role: "user",
-          content: prompt,
-        },
+        { role: "system", content: buildSystemPrompt(intent) },
+        { role: "user", content: prompt },
       ],
     });
 
-    const content =
-      completion?.choices?.[0]?.message?.content?.trim();
-
-    if (!content) {
-      throw new Error("Groq returned empty response");
-    }
+    const content = completion?.choices?.[0]?.message?.content?.trim();
+    if (!content) throw new Error("Empty AI response");
 
     return content;
   } catch (err) {
     console.error("[Groq] generation failed", err);
-    throw err; // MUST throw so webhook catch works correctly
+    throw err;
   }
 }

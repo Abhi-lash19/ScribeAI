@@ -7,7 +7,6 @@ import { cn } from "../../lib/utils";
 import { Bot, Check, Copy } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import {
-  useAIState,
   useChannelStateContext,
   useMessageContext,
   useMessageTextStreaming,
@@ -16,38 +15,30 @@ import {
 const ChatMessage: React.FC = () => {
   const { message } = useMessageContext();
   const { channel } = useChannelStateContext();
-  const { aiState } = useAIState(channel);
-
-  const { streamedMessageText } = useMessageTextStreaming({
-    text: message.text ?? "",
-    renderingLetterCount: 10,
-    streamingLetterIntervalMs: 50,
-  });
 
   const isUser = !message.user?.id?.startsWith("ai-bot");
+
+  /**
+   * Stream text ONLY for AI messages
+   * Prevents unnecessary re-streaming on user messages
+   */
+  const { streamedMessageText } = useMessageTextStreaming({
+    text: !isUser ? message.text ?? "" : "",
+    renderingLetterCount: 12,
+    streamingLetterIntervalMs: 35,
+  });
+
+  const finalText = !isUser
+    ? streamedMessageText || message.text || ""
+    : message.text || "";
+
   const [copied, setCopied] = useState(false);
 
   const copyToClipboard = async () => {
-    if (streamedMessageText) {
-      await navigator.clipboard.writeText(streamedMessageText);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    }
-  };
-
-  const getAiStateMessage = () => {
-    switch (aiState) {
-      case "AI_STATE_THINKING":
-        return "Thinking...";
-      case "AI_STATE_GENERATING":
-        return "Generating response...";
-      case "AI_STATE_EXTERNAL_SOURCES":
-        return "Accessing external sources...";
-      case "AI_STATE_ERROR":
-        return "An error occurred.";
-      default:
-        return null;
-    }
+    if (!finalText) return;
+    await navigator.clipboard.writeText(finalText);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
   };
 
   const formatTime = (timestamp: string | Date) => {
@@ -80,113 +71,67 @@ const ChatMessage: React.FC = () => {
         )}
 
         {/* Message Content */}
-        <div className="flex flex-col space-y-1">
-          {/* Message Bubble */}
+        <div className="flex flex-col space-y-1 w-full">
+          {/* Bubble */}
           <div
             className={cn(
-              "px-4 py-3 rounded-2xl text-sm leading-relaxed transition-all duration-200",
+              "px-4 py-3 rounded-2xl text-sm leading-relaxed",
               isUser
                 ? "str-chat__message-bubble str-chat__message-bubble--me rounded-br-md"
                 : "str-chat__message-bubble rounded-bl-md"
             )}
           >
-            {/* Message Text */}
-            <div className="break-words">
-              <ReactMarkdown
-                components={{
-                  p: ({ children }) => (
-                    <p className="mb-3 last:mb-0 leading-relaxed">{children}</p>
-                  ),
-                  code: ({ children, ...props }) => {
-                    const { node, ...rest } = props;
-                    const isInline = !rest.className?.includes("language-");
+            <ReactMarkdown
+              components={{
+                p: ({ children }) => (
+                  <p className="mb-3 last:mb-0 leading-relaxed">{children}</p>
+                ),
+                code: ({ children, ...props }) => {
+                  const isInline = !props.className?.includes("language-");
+                  return isInline ? (
+                    <code className="px-1 py-0.5 rounded text-xs font-mono bg-black/10 dark:bg-white/10">
+                      {children}
+                    </code>
+                  ) : (
+                    <pre className="p-3 rounded-md overflow-x-auto my-2 text-xs font-mono bg-black/5 dark:bg-white/5">
+                      <code>{children}</code>
+                    </pre>
+                  );
+                },
+                ul: ({ children }) => (
+                  <ul className="list-disc ml-4 mb-3 space-y-1">
+                    {children}
+                  </ul>
+                ),
+                ol: ({ children }) => (
+                  <ol className="list-decimal ml-4 mb-3 space-y-1">
+                    {children}
+                  </ol>
+                ),
+              }}
+            >
+              {finalText}
+            </ReactMarkdown>
 
-                    return isInline ? (
-                      <code
-                        className="px-1.5 py-0.5 rounded text-xs font-mono bg-black/10 dark:bg-white/10"
-                        {...rest}
-                      >
-                        {children}
-                      </code>
-                    ) : (
-                      <pre className="p-3 rounded-md overflow-x-auto my-2 text-xs font-mono bg-black/5 dark:bg-white/5">
-                        <code {...rest}>{children}</code>
-                      </pre>
-                    );
-                  },
-                  ul: ({ children }) => (
-                    <ul className="list-disc ml-4 mb-3 space-y-1">
-                      {children}
-                    </ul>
-                  ),
-                  ol: ({ children }) => (
-                    <ol className="list-decimal ml-4 mb-3 space-y-1">
-                      {children}
-                    </ol>
-                  ),
-                  li: ({ children }) => (
-                    <li className="leading-relaxed">{children}</li>
-                  ),
-                  blockquote: ({ children }) => (
-                    <blockquote className="border-l-3 pl-3 my-2 italic border-current/30">
-                      {children}
-                    </blockquote>
-                  ),
-                  h1: ({ children }) => (
-                    <h1 className="text-lg font-semibold mb-2 mt-4 first:mt-0">
-                      {children}
-                    </h1>
-                  ),
-                  h2: ({ children }) => (
-                    <h2 className="text-base font-semibold mb-2 mt-3 first:mt-0">
-                      {children}
-                    </h2>
-                  ),
-                  h3: ({ children }) => (
-                    <h3 className="text-sm font-semibold mb-2 mt-3 first:mt-0">
-                      {children}
-                    </h3>
-                  ),
-                  strong: ({ children }) => (
-                    <strong className="font-semibold">{children}</strong>
-                  ),
-                  em: ({ children }) => <em className="italic">{children}</em>,
-                }}
-              >
-                {streamedMessageText || message.text || ""}
-              </ReactMarkdown>
-            </div>
-
-            {/* Loading State */}
-            {aiState && !streamedMessageText && !message.text && (
-              <div className="flex items-center gap-2 mt-2 pt-2">
-                <span className="text-xs opacity-70">
-                  {getAiStateMessage()}
-                </span>
-                <div className="flex space-x-1">
-                  <div className="w-1 h-1 bg-current rounded-full typing-dot opacity-70"></div>
-                  <div className="w-1 h-1 bg-current rounded-full typing-dot opacity-70"></div>
-                  <div className="w-1 h-1 bg-current rounded-full typing-dot opacity-70"></div>
-                </div>
-              </div>
+            {/* Single, clean loading indicator */}
+            {!isUser && !finalText && (
+              <div className="text-xs opacity-60 mt-2">Generating…</div>
             )}
           </div>
 
-          {/* Timestamp and Actions */}
+          {/* Footer */}
           <div className="flex items-center justify-between px-1">
-            {/* Timestamp - Always left aligned */}
             <span className="text-xs text-muted-foreground/70">
               {formatTime(message.created_at || new Date())}
             </span>
 
-            {/* Actions - Only for AI messages, always right aligned */}
-            {!isUser && !!streamedMessageText && (
-              <div className="opacity-0 group-hover:opacity-100 transition-opacity duration-200">
+            {!isUser && finalText && (
+              <div className="opacity-0 group-hover:opacity-100 transition-opacity">
                 <Button
                   variant="ghost"
                   size="sm"
                   onClick={copyToClipboard}
-                  className="h-6 px-2 text-xs hover:bg-muted rounded-md"
+                  className="h-6 px-2 text-xs"
                 >
                   {copied ? (
                     <>

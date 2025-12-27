@@ -1,13 +1,10 @@
 // backend/src/routes/streamWebhook.ts
 
 import { Request, Response } from "express";
-import crypto from "crypto";
 import { isRateLimited } from "../middleware/rateLimiter";
 import { generateAIResponse } from "../services/groqService";
 import {
   sendAIMessage,
-  sendThinkingMessage,
-  deleteMessage,
   startTyping,
   stopTyping,
 } from "../services/streamService";
@@ -28,15 +25,6 @@ function cleanupCache() {
       processedMessages.delete(id);
     }
   }
-}
-
-/**
- * ⚠️ NOTE:
- * Stream Chat webhooks DO NOT send X-Signature / X-Timestamp.
- * This function is kept for reference but NOT enforced.
- */
-function verifyStreamSignature(_req: Request): boolean {
-  return true;
 }
 
 /**
@@ -62,23 +50,17 @@ export function streamWebhook() {
       return res.json({ ok: true });
     }
 
-    // Retry protection
+    // Retry / duplicate protection
     if (processedMessages.has(message.id)) {
       return res.json({ ok: true });
     }
+
     processedMessages.set(message.id, Date.now());
     cleanupCache();
 
     if (processedMessages.size > MAX_CACHE_SIZE) {
-      const oldest = processedMessages.keys().next().value;
-      if (oldest) processedMessages.delete(oldest);
-    }
-
-    // ✅ FIX: Map uses set(), not add()
-    processedMessages.set(message.id, Date.now());
-
-    if (processedMessages.size > MAX_CACHE_SIZE) {
-      cleanupCache();
+      const oldestKey = processedMessages.keys().next().value;
+      if (oldestKey) processedMessages.delete(oldestKey);
     }
 
     const channelId = channel.id;
@@ -87,42 +69,14 @@ export function streamWebhook() {
       return res.json({ ok: true });
     }
 
-    let thinkingMessageId: string | null = null;
-
     try {
       await startTyping(channelId);
 
-      thinkingMessageId = await sendThinkingMessage(channelId);
-
       const aiReply = await generateAIResponse(message.text);
-
-      if (thinkingMessageId) {
-        try {
-          await deleteMessage(thinkingMessageId);
-        } catch (err) {
-          console.warn(
-            "[Stream] Failed to delete thinking message",
-            thinkingMessageId,
-            err
-          );
-        }
-      }
 
       await sendAIMessage(channelId, aiReply);
     } catch (err) {
       console.error("AI webhook error:", err);
-
-      if (thinkingMessageId) {
-        try {
-          await deleteMessage(thinkingMessageId);
-        } catch (err) {
-          console.warn(
-            "[Stream] Failed to delete thinking message",
-            thinkingMessageId,
-            err
-          );
-        }
-      }
 
       await sendAIMessage(
         channelId,

@@ -1,15 +1,7 @@
 // src/components/chat/chat-interface.tsx
 
 import React, { useRef, useState } from "react";
-import {
-  Bot,
-  Briefcase,
-  FileText,
-  Lightbulb,
-  Menu,
-  MessageSquare,
-  Sparkles,
-} from "lucide-react";
+import { Bot, Menu } from "lucide-react";
 import {
   Channel,
   MessageList,
@@ -19,10 +11,8 @@ import {
 } from "stream-chat-react";
 
 import { ChatInput } from "./chat-input";
-import type { ChatInputProps } from "./chat-input";
 import ChatMessage from "./chat-message";
 import { Button } from "../ui/button";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "../ui/tabs";
 
 interface ChatInterfaceProps {
   onToggleSidebar: () => void;
