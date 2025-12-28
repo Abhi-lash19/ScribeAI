@@ -4,6 +4,8 @@ import { Request, Response } from "express";
 import { isRateLimited } from "../middleware/rateLimiter";
 import { generateAIResponse } from "../services/groqService";
 import { insertMessage } from "../db/messages.repo";
+import { upsertChannel } from "../db/channels.repo";
+
 import {
   sendAIMessage,
   startTyping,
@@ -27,6 +29,17 @@ function cleanupCache() {
     }
   }
 }
+
+function generateSessionTitle(text: string): string {
+  const cleaned = text
+    .replace(/\s+/g, " ")
+    .trim();
+
+  const words = cleaned.split(" ").slice(0, 6).join(" ");
+
+  return words.charAt(0).toUpperCase() + words.slice(1);
+}
+
 
 /**
  * Stream webhook middleware
@@ -65,6 +78,12 @@ export function streamWebhook() {
     }
 
     const channelId = channel.id;
+
+    // Ensure channel exists + set title on first message only
+    upsertChannel(
+      channelId,
+      generateSessionTitle(message.text)
+    );
 
     // Persist user message (non-blocking)
     insertMessage({

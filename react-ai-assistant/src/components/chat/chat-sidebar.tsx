@@ -118,7 +118,7 @@ export const ChatSidebar = ({
               Preview={(previewProps) => {
                 const channelName =
                   ((previewProps.channel.data as { name?: string } | undefined)
-                    ?.name as string | undefined) || "New Writing Session";
+                    ?.name as string | undefined) || "Writing Session";
 
                 return (
                   <div

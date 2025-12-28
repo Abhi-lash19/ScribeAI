@@ -51,6 +51,11 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
     await channel.sendMessage({ text });
   };
 
+  const channelTitle =
+    ((channel?.data as { name?: string } | undefined)?.name as
+      | string
+      | undefined) || "Writing Session";
+
   return (
     <div className="flex flex-col h-full bg-background">
       <header className="flex items-center gap-3 px-4 py-3 border-b">
@@ -65,9 +70,7 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
 
         <div className="flex items-center gap-2">
           <Bot className="h-5 w-5 text-primary" />
-          <h2 className="text-sm font-semibold">
-            {(channel?.data as any)?.name || "New Writing Session"}
-          </h2>
+          <h2 className="text-sm font-semibold">{channelTitle}</h2>
         </div>
       </header>
 

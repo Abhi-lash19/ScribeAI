@@ -64,7 +64,7 @@ const AuthenticatedCore = ({ user, onLogout }: AuthenticatedAppProps) => {
         "messaging",
         uuidv4(),
         {
-          name: message.text.substring(0, 50),
+          name: message.text.slice(0, 50),
           members: [user.id],
         } as any
       );
