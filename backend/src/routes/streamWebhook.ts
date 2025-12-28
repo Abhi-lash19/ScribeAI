@@ -3,6 +3,7 @@
 import { Request, Response } from "express";
 import { isRateLimited } from "../middleware/rateLimiter";
 import { generateAIResponse } from "../services/groqService";
+import { insertMessage } from "../db/messages.repo";
 import {
   sendAIMessage,
   startTyping,
@@ -65,6 +66,14 @@ export function streamWebhook() {
 
     const channelId = channel.id;
 
+    // Persist user message (non-blocking)
+    insertMessage({
+      id: message.id,
+      channel_id: channelId,
+      role: "user",
+      content: message.text,
+    });
+
     if (isRateLimited(channelId)) {
       return res.json({ ok: true });
     }
@@ -72,9 +81,21 @@ export function streamWebhook() {
     try {
       await startTyping(channelId);
 
-      const aiReply = await generateAIResponse(message.text);
+      const aiReply = await generateAIResponse({
+        userInput: message.text,
+        channelId,
+      });
 
       await sendAIMessage(channelId, aiReply);
+
+      // Persist AI message (non-blocking)
+      insertMessage({
+        id: `ai-${message.id}`,
+        channel_id: channelId,
+        role: "ai",
+        content: aiReply,
+      });
+
     } catch (err) {
       console.error("AI webhook error:", err);
 

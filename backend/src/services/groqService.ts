@@ -1,6 +1,5 @@
-// backend/src/services/groqService.ts
-
 import Groq from "groq-sdk";
+import { getRecentMessages } from "../db/messages.repo";
 
 const groq = new Groq({
   apiKey: process.env.GROQ_API_KEY!,
@@ -12,6 +11,11 @@ type Intent =
   | "summarize"
   | "explain"
   | "generic";
+
+interface GenerateAIResponseInput {
+  userInput: string;
+  channelId: string;
+}
 
 function detectIntent(prompt: string): Intent {
   const p = prompt.toLowerCase();
@@ -48,7 +52,7 @@ function detectIntent(prompt: string): Intent {
   return "generic";
 }
 
-function buildSystemPrompt(intent: Intent) {
+function buildSystemPrompt(intent: Intent): string {
   switch (intent) {
     case "write":
       return `
@@ -87,8 +91,34 @@ Avoid generic or textbook-style explanations.
   }
 }
 
-export async function generateAIResponse(prompt: string): Promise<string> {
-  const intent = detectIntent(prompt);
+function buildContextBlock(
+  messages: { role: string; content: string }[]
+): string {
+  if (!messages.length) return "";
+
+  return messages
+    .map((m) =>
+      m.role === "user"
+        ? `User: ${m.content}`
+        : `Assistant: ${m.content}`
+    )
+    .join("\n");
+}
+
+export async function generateAIResponse(
+  input: GenerateAIResponseInput
+): Promise<string> {
+  const { userInput, channelId } = input;
+  const intent = detectIntent(userInput);
+
+  // Fetch recent context (safe – returns [] on failure)
+  const recentMessages = await getRecentMessages(channelId);
+
+  const contextBlock = buildContextBlock(recentMessages);
+
+  const finalUserPrompt = contextBlock
+    ? `Recent context:\n${contextBlock}\n\nUser input:\n${userInput}`
+    : userInput;
 
   try {
     const completion = await groq.chat.completions.create({
@@ -97,7 +127,7 @@ export async function generateAIResponse(prompt: string): Promise<string> {
       max_tokens: intent === "write" ? 700 : 300,
       messages: [
         { role: "system", content: buildSystemPrompt(intent) },
-        { role: "user", content: prompt },
+        { role: "user", content: finalUserPrompt },
       ],
     });
 
