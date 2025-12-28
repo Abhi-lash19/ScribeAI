@@ -15,6 +15,18 @@ async function ensureAIUser(userId: string) {
   });
 }
 
+/**
+ * Rename Stream channel (used once on first message)
+ */
+export async function renameChannel(
+  channelId: string,
+  title: string
+) {
+  const channel = streamClient.channel("messaging", channelId);
+  await channel.update({
+    name: title,
+  });
+}
 
 /**
  * Start typing indicator

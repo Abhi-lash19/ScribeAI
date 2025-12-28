@@ -10,6 +10,7 @@ import {
   sendAIMessage,
   startTyping,
   stopTyping,
+  renameChannel,
 } from "../services/streamService";
 
 /**
@@ -78,13 +79,13 @@ export function streamWebhook() {
     }
 
     const channelId = channel.id;
+    const title = generateSessionTitle(message.text);
 
-    // Ensure channel exists + set title on first message only
-    upsertChannel(
-      channelId,
-      generateSessionTitle(message.text)
-    );
-
+    // 🔹 Rename Stream channel ONLY if name not set
+    if (!channel.name) {
+      await renameChannel(channelId, title);
+      await upsertChannel(channelId, title);
+    }
     // Persist user message (non-blocking)
     insertMessage({
       id: message.id,

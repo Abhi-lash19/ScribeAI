@@ -90,21 +90,6 @@ const AuthenticatedCore = ({ user, onLogout }: AuthenticatedAppProps) => {
     setShowDeleteDialog(true);
   };
 
-  const handleDeleteConfirm = async () => {
-    if (channelToDelete) {
-      try {
-        if (channelId === channelToDelete.id) {
-          navigate("/");
-        }
-        await channelToDelete.delete();
-      } catch (error) {
-        console.error("Error deleting channel:", error);
-      }
-    }
-    setShowDeleteDialog(false);
-    setChannelToDelete(null);
-  };
-
   if (!client) {
     return (
       <div className="flex items-center justify-center h-screen bg-background">
@@ -143,9 +128,7 @@ const AuthenticatedCore = ({ user, onLogout }: AuthenticatedAppProps) => {
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={handleDeleteConfirm}>
               Delete
-            </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
