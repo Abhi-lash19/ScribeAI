@@ -30,7 +30,8 @@ const corsMiddleware = cors({
     return callback(new Error("Not allowed by CORS"));
   },
   methods: ["GET", "POST", "OPTIONS"],
-  credentials: true,
+  allowedHeaders: ["Content-Type", "Authorization"],
+  credentials: false,
 });
 
 app.use(corsMiddleware);
