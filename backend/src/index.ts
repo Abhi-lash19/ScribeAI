@@ -13,34 +13,43 @@ import { serverClient } from "./serverClient";
 
 const app = express();
 
-// ----- Global middleware -----
+/* -------------------------------------------------------------------------- */
+/*                               Global middleware                             */
+/* -------------------------------------------------------------------------- */
+
 app.use(helmet());
 
-app.use(
-  cors({
-    origin(origin, callback) {
-      if (!origin) return callback(null, true);
+const corsMiddleware = cors({
+  origin(origin, callback) {
+    if (!origin) return callback(null, true);
 
-      if (config.corsOrigin.includes(origin)) {
-        return callback(null, true);
-      }
+    if (config.corsOrigin.includes(origin)) {
+      return callback(null, true);
+    }
 
-      return callback(new Error("Not allowed by CORS"));
-    },
-    methods: ["GET", "POST", "OPTIONS"],
-  })
-);
+    return callback(new Error("Not allowed by CORS"));
+  },
+  methods: ["GET", "POST", "OPTIONS"],
+  credentials: true,
+});
 
-app.options("*", cors());
+app.use(corsMiddleware);
+app.options("*", corsMiddleware);
 
 app.use(express.json({ limit: "1mb" }));
+
 app.use(
   morgan(config.env === "production" ? "combined" : "dev")
 );
 
-// ----- Webhook -----
+/* -------------------------------------------------------------------------- */
+/*                                   Routes                                   */
+/* -------------------------------------------------------------------------- */
+
+// Stream webhook
 app.post("/webhooks/stream", streamWebhook());
 
+// Token endpoint (Stream auth)
 app.post("/token", async (req, res) => {
   const { userId } = req.body as { userId?: string };
 
@@ -63,16 +72,18 @@ app.post("/token", async (req, res) => {
   });
 });
 
-
-// ----- Health -----
-app.get("/", (_req, res) => {
-  res.json({
+// Health check (Koyeb uses this)
+app.get("/health", (_req, res) => {
+  res.status(200).json({
     status: "ok",
     env: config.env,
   });
 });
 
-// ----- Error handling -----
+/* -------------------------------------------------------------------------- */
+/*                              Error handling                                 */
+/* -------------------------------------------------------------------------- */
+
 app.use((_req, res) => {
   res.status(404).json({ error: "Not found" });
 });
@@ -87,7 +98,10 @@ app.use(
   }
 );
 
-// ----- Startup -----
+/* -------------------------------------------------------------------------- */
+/*                                   Startup                                   */
+/* -------------------------------------------------------------------------- */
+
 async function start() {
   try {
     await verifyStreamConnection();
